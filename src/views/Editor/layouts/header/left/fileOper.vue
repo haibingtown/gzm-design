@@ -29,10 +29,6 @@
                         <icon-copy class="m-r-5px"/>
                         创建副本
                     </li>
-                    <li @click="fileOper('importRecommendDish')">
-                        <icon-import class="m-r-5px"/>
-                        商户通延展推荐菜
-                    </li>
                 </ul>
             </div>
         </template>

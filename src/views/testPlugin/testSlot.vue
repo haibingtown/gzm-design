@@ -14,8 +14,15 @@
       console.log(item)
     }
   }
-  const printJson = () => {
+  const recommendDish = () => {
     console.log(canvas.activeObject)
+    canvas.contentFrame.width = 1200
+    canvas.contentFrame.height = 900
+    console.log(canvas.contentFrame.children)
+
+    setTimeout(() => {
+        canvas.childrenEffect()
+    }, 200)
   }
 </script>
 
@@ -23,11 +30,8 @@
   <div class="p2">
     <div>测试插件插槽</div>
     <a-space>
-        <a-button @click="printTrace" hidden>打印Trace</a-button>
-        <a-button @click="printJson">打印JSON</a-button>
+        <a-button @click="recommendDish">商户通->推荐菜</a-button>
+        
     </a-space>
-<!--    <template v-for="(value, key) in canvas.activeObject.value?.proxyData" :key="key">-->
-<!--      <div>{{ key }}: {{ value }}</div>-->
-<!--    </template>-->
   </div>
 </template>
