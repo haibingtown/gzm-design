@@ -29,6 +29,10 @@
                         <icon-copy class="m-r-5px"/>
                         创建副本
                     </li>
+                    <li @click="fileOper('importRecommendDish')">
+                        <icon-import class="m-r-5px"/>
+                        商户通延展推荐菜
+                    </li>
                 </ul>
             </div>
         </template>
@@ -89,6 +93,9 @@ const fileOper = (type) => {
         case 'importPsdFile':
             importPsdFile()
             break;
+        case 'importRecommendDish':
+            importRecommendDish()
+            break;
         case 'importJsonFile':
             importJsonFile()
             break;
@@ -120,6 +127,92 @@ const insertImg = async (clear = false) => {
             canvas.add(image)
         })
     })
+}
+
+const importRecommendDish = () => {
+    selectFiles({accept: '.psd', multiple: false}).then((fileList) => {
+        let oldAll = []
+        for (const item of Array.from(fileList)) {
+            if (checkFileExt(item, ['psd'])) {
+                visible.value = true
+                processTitle.value = '正在解析'
+                console.log('开始执行')
+                const onProcess = (result) => {
+
+                }
+                // PSD文件
+                parsePsdFile(item, onProcess).then(async value => {
+                    const {psd, layers} = value
+                    processTitle.value = '正在导入'
+                    canvas.contentFrame.removeAll()
+
+                    // 修改画布尺寸
+                    canvas.contentFrame.width = 1600
+                    canvas.contentFrame.height = 900
+                    
+                    layers.left =  layers.left - 100
+                    layers.right = layers.right - 100
+
+                    var logo = layers.find(v => v.name === "logo")
+                    var dish = layers.find(v => v.name === "主菜品 1")
+
+                    var x,y = 0
+                    if(dish !== null){
+                        // 寻找菜品图锚点，修改所有图层的相对位置
+                        x = dish.left + (dish.right - dish.left) / 2 - canvas.contentFrame.width / 2
+                        y = dish.top + (dish.bottom - dish.top) / 2 - canvas.contentFrame.height / 2
+                    }
+
+                    console.log('layers=', layers)
+                    await parseRecommendLayers(layers, [x,y])
+                    
+                    if(logo !== null){
+                        // 移动 logo 位置，调整大小
+                        logo.right = 100 + logo.right - logo.left
+                        logo.bottom = 100 + logo.bottom - logo.top
+                        logo.left = 100
+                        logo.top = 100
+                    }
+
+                    // 修改菜品图的大小
+                    processTitle.value = '导入完成'
+                    processInfo.text = '已导入'
+                    setTimeout(() => {
+                        canvas.childrenEffect()
+                    }, 200)
+                }).catch(reason => {
+                    visible.value = false
+                    Message.warning({
+                        content: reason.message,
+                        duration: 4000
+                    })
+                })
+
+            } else {
+                // 非PSD文件
+                getImgStr(item).then((file) => {
+                    // insertImgFile(file)
+                })
+            }
+        }
+    })
+}
+
+// 递归函数，寻找指定名称的 layer
+const findLayersByName = (layer, targetName, result = []) => {
+  // 检查当前层是否具有目标名称
+  if (layer.name === targetName) {
+    result.push(layer);
+  }
+
+  // 递归处理子层
+  if (layer.children && layer.children.length > 0) {
+    for (const childLayer of layer.children) {
+      findLayersByName(childLayer, targetName, result);
+    }
+  }
+
+  return result;
 }
 
 const importPsdFile = () => {
@@ -268,6 +361,76 @@ const addMask = async (index, groups, parent: IUI = canvas.contentFrame) => {
     const mask = parseMask(index, groups, parent)
     return mask
 }
+
+
+const parseRecommendLayers = (layers, positon, parent: IUI = canvas.contentFrame) => {
+    return new Promise((resolve) => {
+        layers.reverse();
+        let group = [];
+        let i = 0;
+        let totalLayers = layers.length; // 总图层数量
+        let processedLayers = 0; // 已解析的图层数量
+
+        var x = positon[0]
+        var y = positon[1]
+
+        const processNextLayer = () => {
+            if (i >= totalLayers) { // 使用 totalLayers 变量代替 layers.length
+                resolve(); // 解析完成后 resolve Promise
+                return;
+            }
+
+            let layer = layers[i];
+            console.log(layer.name + ':', layer);
+            processInfo.text = `正在导入：${layer.name}`
+
+            // 计算当前进度百分比
+            processedLayers++;
+            let progress = Math.floor(processedLayers / totalLayers * 100);
+
+            // 更新进度条的值
+            processInfo.process = progress / 100;
+
+            layer.left = layer.left - x
+            layer.right = layer.right - x
+            layer.top = layer.top - y
+            layer.bottom = layer.bottom - y
+
+            // 层级：数值越大越靠前，与ps的层级相反
+            let index = totalLayers - i; // 使用 totalLayers 变量代替 layers.length
+            layer.zIndex = index;
+
+            if (layer.children) {
+                // 组
+                const parent2 = addGroup(layer, parent);
+                parseRecommendLayers(layer.children, positon, parent2)
+                    .then(() => {
+                        i++;
+                        setTimeout(processNextLayer, 0); // 将下一层处理放入事件循环的下一个任务中
+                    });
+            } else {
+                if (layer.clipping) {
+                    // 剪切蒙版
+                    group.push(layer);
+                } else {
+                    if (group.length > 0) {
+                        group.push(layer);
+                        // 打组，创建蒙版数据
+                        addMask(index, group, parent);
+                        group = [];
+                    } else {
+                        const obj = addObj(layer, parent);
+                    }
+                }
+
+                i++;
+                setTimeout(processNextLayer, 0); // 将下一层处理放入事件循环的下一个任务中
+            }
+        };
+        totalLayers = layers.length; // 将总图层数量赋值给 totalLayers 变量
+        processNextLayer();
+    });
+};
 
 </script>
 
